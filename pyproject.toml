@@ -1,0 +1,26 @@
+[project]
+name = "fixji-ai-gateway"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ramkumar0726", email = "ramkumarkota0726@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.161.1",
+    "fastmcp>=4.1.3",
+    "langchain[mcp]>=1.4.7",
+    "langchain-community>=0.4.2",
+    "langchain-core>=1.7.0",
+    "langchain-openai>=1.7.2",
+    "pydantic>=2.14.1",
+]
+
+[project.scripts]
+fixji-ai-gateway = "fixji_ai_gateway:main"
+fixji-mcp-server = "fixji_mcp_server.server:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
