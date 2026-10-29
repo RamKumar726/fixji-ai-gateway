@@ -7,7 +7,7 @@ from langgraph.types import Command
 
 from ..agent import build_agent
 from ..dependencies import get_token
-from ..schemas import ChatRequest, ChatResponse
+from ..schemas import ChatRequest, ChatResponse, DecisionRequest
 from ..session import Session, store
 
 logger = logging.getLogger(__name__)
@@ -41,8 +41,32 @@ async def _run(session : Session, agent_input) -> ChatRequest:
     config = {"configurable" : {"thread_id" : session.session_id}}
     try:
         result = await session.agent.ainvoke(agent_input,  config)
-    except:
-        pass
+    except Exception:
+        logger.excpetion("Agent Invocation failed")
+        raise HTTPException(
+            status_code = 502,
+            detail = "The assistance failed to respond. Please try again."
+        )
+
+    session.last_used = time.time()
+    interrupts = result.get("__interrupt__")
+    if interrupts:
+        action = interrupts[0].value["action_requests"][0]
+        session.pending_approval = True
+        return ChatResponse(
+            session_id=session.session_id,
+            status="pending_approval",
+            reply="Please review and confirm your booking.",
+            approval=action["args"],  # the REAL arguments, not LLM-written text
+        )
+
+    session.pending_approval = False
+    return ChatResponse(
+        session_id=session.session_id,
+        status="message",
+        reply=_extract_text(result["messages"][-1].content),
+    )
+
 
 
 @router.post("", response_model=ChatResponse)
@@ -65,19 +89,34 @@ async def chat(body: ChatRequest, token: str = Depends(get_token)):
 
     # one request at a time per session, so history can't get interleaved
     async with session.lock:
-        session.history.append({"role": "user", "content": body.message})
-        try:
-            result = await session.agent.ainvoke({"messages": session.history})
-        except Exception:
-            logger.exception("Agent invocation failed")
-            session.history.pop()  # drop the unanswered user message
-            raise HTTPException(status_code=502, detail="The assistant failed to respond. Please try again.")
+        if session.pending_approval:
+            raise HTTPException(
+                status_code=409,
+                detail="A booking is waiting for your approval. Approve or reject it first.",
+            )
+        # only the NEW message is sent; the checkpointer holds the history
+        return await _run(
+            session,
+            {"messages": [{"role": "user", "content": body.message}]},
+        )
 
-        session.history = result["messages"]
-        session.last_used = time.time()
-        reply = _extract_text(result["messages"][-1].content)
+@router.post("/{session_id}/decision", response_model=ChatResponse)
+async def decide(session_id: str, body: DecisionRequest, token: str = Depends(get_token)):
+    session = _get_owned_session(session_id, token)
 
-    return ChatResponse(session_id=session.session_id, reply=reply)
+    async with session.lock:
+        if not session.pending_approval:
+            raise HTTPException(status_code=409, detail="Nothing is waiting for approval")
+
+        if body.decision == "approve":
+            decision = {"type": "approve"}
+        else:
+            decision = {
+                "type": "reject",
+                "message": body.reason or "The customer rejected this booking.",
+            }
+
+        return await _run(session, Command(resume={"decisions": [decision]}))
 
 
 @router.delete("/{session_id}", status_code=204)
