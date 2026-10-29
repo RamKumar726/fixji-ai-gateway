@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .routers import auth, chat
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,6 +24,12 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+
+app.mount(
+    "/widget",
+    StaticFiles(directory=Path(__file__).parent / "static"),
+    name="widget",
+)
 
 
 @app.get("/health")

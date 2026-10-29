@@ -14,7 +14,7 @@ class Settings:
     AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1-mini")
 
     # Comma-separated list, e.g. "http://localhost:3000,https://fixji.com"
-    CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5500, *").split(",") if o.strip()]
+    CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5500,https://fixji-clone-client.vercel.app/, *").split(",") if o.strip()]
     SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
 
 
